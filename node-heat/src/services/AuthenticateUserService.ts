@@ -9,6 +9,7 @@
  */
 
 import axios from "axios";
+import prismaClient from "../prisma";
 
 interface IAccessTokenResponse {
   access_token: string;
@@ -45,6 +46,25 @@ class AuthenticateUserService {
         },
       }
     );
+
+    const { login, id, avatar_url, name } = response.data;
+
+    let user = await prismaClient.user.findFirst({
+      where: {
+        github_id: id,
+      },
+    });
+
+    if (!user) {
+      user = await prismaClient.user.create({
+        data: {
+          github_id: id,
+          login,
+          avatar_url,
+          name,
+        },
+      });
+    }
 
     return response.data;
   }
