@@ -1,13 +1,72 @@
-import { createContext, ReactNode } from "react";
+import { createContext, useEffect, useState } from "react";
+import { api } from "../services/api";
+import {
+  AuthContextData,
+  AuthProviderProps,
+  AuthResponse,
+  User,
+} from "./auth.types";
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext({} as AuthContextData);
 
-type AuthProvider = {
-  children: ReactNode;
-};
+export function AuthProvider(props: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
 
-export function AuthProvider(props: AuthProvider) {
+  const signInUrl = `https://github.com/login/oauth/authorize?scope=user&client_id=a3dcb7e52ee450c50f54`;
+
+  async function signIn(githubCode: string) {
+    const response = await api.post<AuthResponse>("authenticate", {
+      code: githubCode,
+    });
+
+    const { token, user } = response.data;
+
+    localStorage.setItem("@dowhile:token", token);
+
+    setUser(user);
+  }
+
+  function signOut() {
+    setUser(null);
+    localStorage.removeItem("@dowhile:token");
+  }
+
+  function handleWithGithubCode() {
+    const url = window.location.href;
+    const hasGithubCode = url.includes("?code=");
+
+    if (hasGithubCode) {
+      const [urlWithoutCode, githubCode] = url.split("?code=");
+
+      window.history.pushState({}, "", urlWithoutCode);
+
+      signIn(githubCode);
+    }
+  }
+
+  function getTokenAndLogin() {
+    const token = localStorage.getItem("@dowhile:token");
+
+    if (token) {
+      api.defaults.headers.common.authorization = `Bearer ${token}`;
+
+      api.get<User>("profile").then((response) => {
+        setUser(response.data);
+      });
+    }
+  }
+
+  useEffect(() => {
+    getTokenAndLogin();
+  }, []);
+
+  useEffect(() => {
+    handleWithGithubCode();
+  }, []);
+
   return (
-    <AuthContext.Provider value={null}>{props.children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ signInUrl, user, signOut }}>
+      {props.children}
+    </AuthContext.Provider>
   );
 }
